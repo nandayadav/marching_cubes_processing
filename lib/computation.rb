@@ -42,7 +42,7 @@ class Computation
     f.each_byte{|b| @buffer << b }
     f.close
     @x_dimension, @y_dimension, @z_dimension = @buffer.unpack('III') #THe first 3 int values are x, y, z dimensions
-    @size = @x_dimension*@y_dimension*z_dimension
+    @size = @x_dimension*@y_dimension*@z_dimension
     @buffer = @buffer[0..@size-1] #Assuming unsigned char is 1 byte
   end
   
@@ -50,13 +50,13 @@ class Computation
     index = (x+ y*@x_dimension + z*@x_dimension*@y_dimension)
     @indices = []
     @indices[0] = index
-  	@indices[1] = @indices[0] + 1
-  	@indices[3] = @indices[0] + @x_dimension
-  	@indices[2] = @indices[3] + 1
-  	@indices[4] = @indices[0] + @x_dimension*@y_dimension
-  	@indices[5] = @indices[4] + 1
-  	@indices[7] = @indices[4] + @x_dimension
-  	@indices[6] = @indices[7] + 1
+    @indices[1] = @indices[0] + 1
+    @indices[3] = @indices[0] + @x_dimension
+    @indices[2] = @indices[3] + 1
+    @indices[4] = @indices[0] + @x_dimension*@y_dimension
+    @indices[5] = @indices[4] + 1
+    @indices[7] = @indices[4] + @x_dimension
+    @indices[6] = @indices[7] + 1
   end
   
   #Compute mask(array of 0/1 based on iso_value and given lookup table)
