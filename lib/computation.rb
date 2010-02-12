@@ -1,7 +1,9 @@
 require 'lib/vector'
 require 'lib/data_point'
+require 'lib/table_data'
+
 class Computation
-  attr_accessor :iso_value, :weight
+  attr_accessor :iso_value, :weight, :triangle_list
   def initialize(options = {})
     @iso_value = options[:iso_value]
     #3D data specific vars, will be filled in after reading data file
@@ -13,6 +15,16 @@ class Computation
     @file = options[:file]
     @indices = [] #Used to store indices of 8 vertices
     @buffer = ''  #Store actual 3D raw data 
+    @vertex_a = Vector.new
+    @vertex_b = Vector.new
+    @triangle_list = [] #Array that stores DataPoint objects, each one representing triangles to be rendered
+  end
+  
+  def self.test
+    c = new({:iso_value => 100, :file => '/../data/engine.bin'})
+    c.read_file
+    c.main_loop
+    puts "Number of triangles: #{triangle_list.size}"
   end
   
   def main_loop
@@ -28,8 +40,21 @@ class Computation
           mask = compute_mask(@buffer)
           table_index = to_decimal(mask)
           side_counter = 0
-          data_point = DataPoint.new
-          
+          data_point = DataPoint.new(Vector.new, Vector.new)
+          while(TableData::TRI_TABLE[table_index][side_counter] != -1)
+  	    first, second = find_vertices(TableData::TRI_TABLE[table_index][side_counter], i, j, k)
+  	    interpolated = interpolate_scalar(@vertex_a, @vertex_b, @iso_value, @buffer[first], @buffer[second])
+  	    #Set interpolated vector
+  	    data_point.vertex = interpolated
+  	    normal_a = compute_normal(first)
+  	    normal_b = compute_normal(second)
+            #set interpolated normal vector
+  	    interpolated_normal = interpolate_normal(normal_a, normal_b)
+  	    data_point.normal = interpolated_normal
+            #Add the triangle in the array
+  	    triangle_list << data_point
+  	    side_counter += 1
+  	  end
         end
       end
     end
@@ -38,7 +63,7 @@ class Computation
   
   #Read the binary file data into array
   def read_file
-    f = File.new(@file, "r")
+    f = File.new(File.dirname(__FILE__) + @file, "r")
     f.each_byte{|b| @buffer << b }
     f.close
     @x_dimension, @y_dimension, @z_dimension = @buffer.unpack('III') #THe first 3 int values are x, y, z dimensions
@@ -90,6 +115,17 @@ class Computation
     bit_mask.each_with_index{|val, index| value += val*(2**index) }
     value.to_i
   end
+  
+  def find_vertices(lookup_val, x, y, z)
+    mapping = TableData::MAPPINGS[lookup_val]
+    vertices = {:x => x, :y => y, :z => z}
+    vertices.each do |key, val|
+      @vertex_a.point[key] = val + (mapping[0][key] || 0)
+      @vertex_b.point[key] = val + (mapping[1][key] || 0)
+    end
+    mapping[2]
+  end
+  
   
   
 end
