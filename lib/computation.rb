@@ -14,7 +14,7 @@ class Computation
     @size = nil
     @file = options[:file]
     @indices = [] #Used to store indices of 8 vertices
-    @buffer = ''  #Store actual 3D raw data 
+    @buffer = []  #Store actual 3D raw data 
     @vertex_a = Vector.new
     @vertex_b = Vector.new
     @triangle_list = [] #Array that stores DataPoint objects, each one representing triangles to be rendered
@@ -37,24 +37,34 @@ class Computation
       for j in 0..@y_dimension-1
         for i in 0..@x_dimension-1
           find_offsets(i, j, k)
+          puts "(#{i},#{j},#{k})"
           mask = compute_mask(@buffer)
+          puts "Mask: #{mask}"
           table_index = to_decimal(mask)
+          puts "table index: #{table_index}"
           side_counter = 0
           data_point = DataPoint.new(Vector.new, Vector.new)
           while(TableData::TRI_TABLE[table_index][side_counter] != -1)
-  	    first, second = find_vertices(TableData::TRI_TABLE[table_index][side_counter], i, j, k)
-  	    interpolated = interpolate_scalar(@vertex_a, @vertex_b, @iso_value, @buffer[first], @buffer[second])
-  	    #Set interpolated vector
-  	    data_point.vertex = interpolated
-  	    normal_a = compute_normal(first)
-  	    normal_b = compute_normal(second)
-            #set interpolated normal vector
-  	    interpolated_normal = interpolate_normal(normal_a, normal_b)
-  	    data_point.normal = interpolated_normal
-            #Add the triangle in the array
-  	    triangle_list << data_point
-  	    side_counter += 1
-  	  end
+  	        first, second = find_vertices(TableData::TRI_TABLE[table_index][side_counter], i, j, k)
+  	        puts "A: #{@vertex_a}"
+  	        puts "B: #{@vertex_b}"
+  	        puts "first: #{first}"
+  	        puts "second: #{second}"
+  	        
+  	        side_counter += 1 
+  	        next if @buffer[first] == 0 && @buffer[second] == 0 || (@buffer[first] == @buffer[second])
+      	    interpolated = interpolate_scalar(@vertex_a, @vertex_b, @iso_value, @buffer[first], @buffer[second])
+      	    #Set interpolated vector
+      	    data_point.vertex = interpolated
+      	    normal_a = compute_normal(first)
+      	    normal_b = compute_normal(second)
+                #set interpolated normal vector
+      	    interpolated_normal = interpolate_normal(normal_a, normal_b)
+      	    data_point.normal = interpolated_normal
+                #Add the triangle in the array
+      	    triangle_list << data_point
+      	    #side_counter += 1
+      	  end
         end
       end
     end
@@ -64,11 +74,17 @@ class Computation
   #Read the binary file data into array
   def read_file
     f = File.new(File.dirname(__FILE__) + @file, "r")
-    f.each_byte{|b| @buffer << b }
+    temp_buffer = ''
+    f.each_byte{|b| temp_buffer << b}
     f.close
-    @x_dimension, @y_dimension, @z_dimension = @buffer.unpack('III') #THe first 3 int values are x, y, z dimensions
+    @x_dimension, @y_dimension, @z_dimension = temp_buffer.unpack('III') #THe first 3 int values are x, y, z dimensions
     @size = @x_dimension*@y_dimension*@z_dimension
-    @buffer = @buffer[0..@size-1] #Assuming unsigned char is 1 byte
+    puts "Size: #{@size}"
+    puts @x_dimension
+    puts @y_dimension
+    puts @z_dimension
+    temp_buffer = temp_buffer[0..@size-1] #Assuming unsigned char is 1 byte
+    temp_buffer.each_byte{|b| @buffer << b}
   end
   
   def find_offsets(x, y, z)
@@ -116,7 +132,40 @@ class Computation
     value.to_i
   end
   
+  def compute_normal(i)
+  	temp_normal = {}
+  	xy = @x_dimension*@y_dimension
+  	if i % @x_dimension == 0									          #the left-most
+  		temp_normal[:x] = @buffer[i + 1] - @buffer[i] 
+  	elsif (i % @x_dimension) == (@x_dimension - 1)			#the right-most 
+  		temp_normal[:x] = @buffer[i] - @buffer[i - 1] 
+  	else													                      #in the midle
+  		temp_normal[:x] = (@buffer[i + 1] - @buffer[i - 1]) / 2 
+    end
+
+  	if i % xy < @x_dimension							              #the inner-most
+  		temp_normal[:y] = @buffer[i + @x_dimension] - @buffer[i]
+  	elsif ((i + @x_dimension) % xy) < @x_dimension			#the outer-most
+  		temp_normal[:y] = @buffer[i] - @buffer[i - @x_dimension]
+  	else													                      #in the midle
+  		temp_normal[:y] = (@buffer[i + @x_dimension] - @buffer[i - @x_dimension]) / 2
+    end
+
+
+  	if i < xy							                              #the bottom layer
+  		temp_normal[:z] = @buffer[i + xy] - @buffer[i]
+  	elsif i >= xy * (@z_dimension - 1)			            #the top layer
+  		temp_normal[:z] = @buffer[i] - @buffer[i - xy]
+  	else													                      #in the midle
+  		temp_normal[:z] = (@buffer[i + xy] - @buffer[i - xy] ) / 2
+    end
+    temp_normal = Vector.new(temp_normal)
+  	temp_normal.normalize
+  end
+  
   def find_vertices(lookup_val, x, y, z)
+    puts "Lookup val: #{lookup_val}"
+    puts "For POint: #{x}, #{y}, #{z}"
     mapping = TableData::MAPPINGS[lookup_val]
     vertices = {:x => x, :y => y, :z => z}
     vertices.each do |key, val|

@@ -5,12 +5,11 @@ class Vector < Struct.new(:point)
   end
   
   def magnitude
-    squared = 0
-    self.point.each_val{|v| squared += (val*val)}
-    Math::sqrt(squared)
+    Math.sqrt(self.point.values.inject(0){|sum, val| sum + (val**2)})
   end
   
   def normalize
-    Vector.new({:x => self.point[:x] / self.magnitude, :y => self.point.y / self.magnitude, :z => self.point.z / self.magnitude})
+    magnitude = self.magnitude
+    Vector.new({:x => self.point[:x] / magnitude, :y => self.point[:y] / magnitude, :z => self.point[:z] / magnitude})
   end
 end
