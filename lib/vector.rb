@@ -1,4 +1,4 @@
-class Vector < Struct.new(:point)
+class Vector 
   attr_accessor :point
   def initialize(point = {:x => 0, :y => 0, :z => 0})
     self.point = point
