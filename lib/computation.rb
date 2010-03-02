@@ -1,6 +1,7 @@
 require 'lib/vector'
 require 'lib/data_point'
 require 'lib/table_data'
+require 'yaml'
 
 class Computation
   attr_accessor :iso_value, :weight, :triangle_list
@@ -21,10 +22,19 @@ class Computation
   end
   
   def self.test
-    c = new({:iso_value => 100, :file => '/../data/engine.bin'})
+    c = new({:iso_value => 30, :file => '/../data/brain.bin'})
     c.read_file
     c.main_loop
-    puts "Number of triangles: #{triangle_list.size}"
+    c.triangle_list
+    File.open('test.yml', 'w') do |f|  
+      c.triangle_list.each_with_index do |t, i|
+        hash_block = {}
+        hash_block['normal'] = t.normal.point
+        hash_block['vertex'] = t.vertex.point
+        h = {"#{i}" => hash_block}
+        f.puts h.to_yaml
+      end
+    end
   end
   
   def main_loop
@@ -33,37 +43,33 @@ class Computation
     normal_a = Vector.new
     normal_b = Vector.new
     #Loop through the @buffer
-    for k in 0..@z_dimension-1
+    for k in 0..1#@z_dimension-1
       for j in 0..@y_dimension-1
         for i in 0..@x_dimension-1
           find_offsets(i, j, k)
-          puts "(#{i},#{j},#{k})"
+          #puts "(#{i},#{j},#{k})"
           mask = compute_mask(@buffer)
-          puts "Mask: #{mask}"
+          #puts "Mask: #{mask}"
           table_index = to_decimal(mask)
-          puts "table index: #{table_index}"
+          #puts "table index: #{table_index}"
           side_counter = 0
           data_point = DataPoint.new(Vector.new, Vector.new)
           while(TableData::TRI_TABLE[table_index][side_counter] != -1)
   	        first, second = find_vertices(TableData::TRI_TABLE[table_index][side_counter], i, j, k)
-  	        puts "A: #{@vertex_a}"
-  	        puts "B: #{@vertex_b}"
-  	        puts "first: #{first}"
-  	        puts "second: #{second}"
-  	        
   	        side_counter += 1 
   	        next if @buffer[first] == 0 && @buffer[second] == 0 || (@buffer[first] == @buffer[second])
-      	    interpolated = interpolate_scalar(@vertex_a, @vertex_b, @iso_value, @buffer[first], @buffer[second])
+      	    interpolated, weight = interpolate_scalar(@buffer[first], @buffer[second])
       	    #Set interpolated vector
       	    data_point.vertex = interpolated
       	    normal_a = compute_normal(first)
       	    normal_b = compute_normal(second)
-                #set interpolated normal vector
-      	    interpolated_normal = interpolate_normal(normal_a, normal_b)
+      	    interpolated_normal = interpolate_normal(normal_a, normal_b, weight)
       	    data_point.normal = interpolated_normal
-                #Add the triangle in the array
-      	    triangle_list << data_point
-      	    #side_counter += 1
+            #Add the triangle in the array
+            puts "Adding triangle: "
+            puts data_point.normal.inspect
+            puts data_point.vertex.inspect
+      	    @triangle_list << data_point
       	  end
         end
       end
@@ -75,16 +81,13 @@ class Computation
   def read_file
     f = File.new(File.dirname(__FILE__) + @file, "r")
     temp_buffer = ''
-    f.each_byte{|b| temp_buffer << b}
+    f.each{|b| temp_buffer << b}
     f.close
     @x_dimension, @y_dimension, @z_dimension = temp_buffer.unpack('III') #THe first 3 int values are x, y, z dimensions
     @size = @x_dimension*@y_dimension*@z_dimension
-    puts "Size: #{@size}"
-    puts @x_dimension
-    puts @y_dimension
-    puts @z_dimension
-    temp_buffer = temp_buffer[0..@size-1] #Assuming unsigned char is 1 byte
     temp_buffer.each_byte{|b| @buffer << b}
+    @buffer = @buffer[12..@buffer.size-1]
+    false
   end
   
   def find_offsets(x, y, z)
@@ -108,15 +111,15 @@ class Computation
   end
   
   #interpolate the scalar values and get the intersection point
-  def interpolate_scalar(vector_a, vector_b, isovalue, first, second)
+  def interpolate_scalar(first, second)
     point = {}
-    @weight = (isovalue - first)/(second - first)
-    vector_a.point.each{|key, val| point[key] = val + @weight*(vector_b.point[key]) - val }
-    Vector.new(point)
+    weight = (@iso_value - first)/(second - first)
+    @vertex_a.point.each{|key, val| point[key] = val + weight*(@vertex_b.point[key]) - val }
+    return Vector.new(point), weight
   end
   
   #interpolate the normal vectors and get the normal vector at the intersected point
-  def interpolate_normal(normal_a, normal_b, weight = @weight)
+  def interpolate_normal(normal_a, normal_b, weight)
     point = {}
     magnitude = 0.0
     normal_a.point.each{|key, val| point[key] = val + weight*(normal_b.point[key] - val) }
